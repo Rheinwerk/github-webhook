@@ -1,66 +1,129 @@
-use lambda_http::{Body, Error, Request, RequestExt, Response};
+use crate::error::Error as AppError;
+use crate::event_handler::handle_event;
+use crate::github::validate_signature;
+use crate::types::{WebhookEventType, WebhookSecret};
+use lambda_http::{Body, Error, Request, Response};
+use std::env;
+use tracing::{error, info};
 
-/// This is the main body for the function.
-/// Write your code inside it.
-/// There are some code example in the following URLs:
-/// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
+/// Main handler for the Lambda function
 pub(crate) async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    // Extract some useful information from the request
-    let who = event
-        .query_string_parameters_ref()
-        .and_then(|params| params.first("name"))
-        .unwrap_or("world");
-    let message = format!("Hello {who}, this is an AWS Lambda HTTP request");
+    // Get the webhook secret from environment variables
+    let webhook_secret = match get_webhook_secret() {
+        Ok(secret) => secret,
+        Err(e) => {
+            error!("Failed to get webhook secret: {}", e);
+            return Ok(create_error_response(500, "Internal server error"));
+        }
+    };
 
-    // Return something that implements IntoResponse.
-    // It will be serialized to the right response event automatically by the runtime
-    let resp = Response::builder()
+    // Get the event type from the X-GitHub-Event header
+    let event_type = event
+        .headers()
+        .get("X-GitHub-Event")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    // Get the signature from the X-Hub-Signature-256 header
+    let signature = event
+        .headers()
+        .get("X-Hub-Signature-256")
+        .and_then(|v| v.to_str().ok());
+
+    // Get the request body
+    let body = event.body();
+    let body_bytes = match body {
+        Body::Text(text) => text.as_bytes(),
+        Body::Binary(bytes) => bytes,
+        Body::Empty => &[],
+    };
+
+    // Validate the signature
+    if let Err(e) = validate_signature(body_bytes, signature, &webhook_secret) {
+        error!("Signature validation failed: {}", e);
+        return Ok(create_error_response(401, "Invalid signature"));
+    }
+
+    // Create webhook event type
+    let webhook_event = WebhookEventType::from_str(event_type);
+
+    // Return 200 for non-pull_request events
+    if !webhook_event.is_pull_request() {
+        info!("Ignoring non-pull_request event: {}", event_type);
+        return Ok(create_success_response());
+    }
+
+    // Handle the event
+    match handle_event(event_type, body_bytes).await {
+        Ok(_) => {
+            info!("Successfully processed event");
+            Ok(create_success_response())
+        }
+        Err(e) => {
+            error!("Failed to process event: {}", e);
+            Ok(create_error_response(500, "Failed to process event"))
+        }
+    }
+}
+
+/// Get the webhook secret from environment variables
+fn get_webhook_secret() -> Result<WebhookSecret, AppError> {
+    let secret = env::var("WEBHOOK_SECRET")
+        .map_err(|_| AppError::EnvVarNotSet("WEBHOOK_SECRET".to_string()))?;
+    WebhookSecret::new(secret)
+}
+
+/// Create a success response
+fn create_success_response() -> Response<Body> {
+    Response::builder()
         .status(200)
-        .header("content-type", "text/html")
-        .body(message.into())
-        .map_err(Box::new)?;
-    Ok(resp)
+        .header("content-type", "application/json")
+        .body(r#"{"status":"success"}"#.into())
+        .unwrap_or_else(|_| {
+            Response::builder()
+                .status(500)
+                .body("Internal server error".into())
+                .unwrap()
+        })
+}
+
+/// Create an error response
+fn create_error_response(status: u16, message: &str) -> Response<Body> {
+    Response::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(format!(r#"{{"status":"error","message":"{}"}}"#, message).into())
+        .unwrap_or_else(|_| {
+            Response::builder()
+                .status(500)
+                .body("Internal server error".into())
+                .unwrap()
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lambda_http::http::HeaderMap;
     use std::collections::HashMap;
-    use lambda_http::{Request, RequestExt};
 
-    #[tokio::test]
-    async fn test_generic_http_handler() {
-        let request = Request::default();
-
-        let response = function_handler(request).await.unwrap();
+    #[test]
+    fn test_create_success_response() {
+        let response = create_success_response();
         assert_eq!(response.status(), 200);
 
         let body_bytes = response.body().to_vec();
         let body_string = String::from_utf8(body_bytes).unwrap();
-
-        assert_eq!(
-            body_string,
-            "Hello world, this is an AWS Lambda HTTP request"
-        );
+        assert_eq!(body_string, r#"{"status":"success"}"#);
     }
 
-    #[tokio::test]
-    async fn test_http_handler_with_query_string() {
-        let mut query_string_parameters: HashMap<String, String> = HashMap::new();
-        query_string_parameters.insert("name".into(), "github-hook-lambda".into());
-
-        let request = Request::default()
-            .with_query_string_parameters(query_string_parameters);
-
-        let response = function_handler(request).await.unwrap();
-        assert_eq!(response.status(), 200);
+    #[test]
+    fn test_create_error_response() {
+        let response = create_error_response(400, "Bad request");
+        assert_eq!(response.status(), 400);
 
         let body_bytes = response.body().to_vec();
         let body_string = String::from_utf8(body_bytes).unwrap();
-
-        assert_eq!(
-            body_string,
-            "Hello github-hook-lambda, this is an AWS Lambda HTTP request"
-        );
+        assert_eq!(body_string, r#"{"status":"error","message":"Bad request"}"#);
     }
 }
