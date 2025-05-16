@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::github::models::{extract_issue_keys, PullRequestPayload};
+use crate::jira::ChecklistManipulator;
 use serde_json::Value;
 use tracing::{debug, info};
 
@@ -58,10 +59,22 @@ async fn process_issue_keys(
     pr_url: &str,
     action: &str,
 ) -> Result<(), Error> {
+    // Create a checklist manipulator
+    let checklist_manipulator = match ChecklistManipulator::from_env() {
+        Ok(manipulator) => manipulator,
+        Err(e) => {
+            info!("Failed to create checklist manipulator: {}", e);
+            return Err(e);
+        }
+    };
+
     // For each current issue key, add the PR URL to the issue
     for key in current_keys {
         info!("Adding PR link to issue: {}", key);
-        // TODO: Implement Jira integration
+        if let Err(e) = checklist_manipulator.add_pr_url(key, pr_url).await {
+            info!("Failed to add PR link to issue {}: {}", key, e);
+            // Continue with other issues even if one fails
+        }
     }
 
     // For title changes, remove PR URL from issues no longer referenced
@@ -73,7 +86,10 @@ async fn process_issue_keys(
 
         for key in removed_keys {
             info!("Removing PR link from issue: {}", key);
-            // TODO: Implement Jira integration
+            if let Err(e) = checklist_manipulator.remove_pr_url(key, pr_url).await {
+                info!("Failed to remove PR link from issue {}: {}", key, e);
+                // Continue with other issues even if one fails
+            }
         }
     }
 
