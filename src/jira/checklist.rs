@@ -4,20 +4,14 @@ use crate::jira::JiraClient;
 use tracing::{debug, info};
 
 /// Checklist manipulator for Jira issues
-pub struct ChecklistManipulator {
-    client: JiraClient,
+pub struct ChecklistManipulator<'a> {
+    client: &'a JiraClient,
 }
 
-impl ChecklistManipulator {
+impl<'a> ChecklistManipulator<'a> {
     /// Creates a new checklist manipulator with the given Jira client
-    pub fn new(client: JiraClient) -> Self {
+    pub fn new(client: &'a JiraClient) -> Self {
         Self { client }
-    }
-
-    /// Creates a new checklist manipulator from environment variables
-    pub fn from_env() -> Result<Self, Error> {
-        let client = JiraClient::from_env()?;
-        Ok(Self::new(client))
     }
 
     /// Adds a PR URL to the issue's checklist field

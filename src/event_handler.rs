@@ -1,11 +1,11 @@
 use crate::error::Error;
 use crate::github::models::{extract_issue_keys, PullRequestPayload};
-use crate::jira::ChecklistManipulator;
+use crate::jira::{ChecklistManipulator, JiraClient};
 use serde_json::Value;
 use tracing::{debug, info};
 
 /// Handles GitHub webhook events
-pub async fn handle_event(event_type: &str, payload: &[u8]) -> Result<(), Error> {
+pub async fn handle_event(event_type: &str, payload: &[u8], jira_client: JiraClient) -> Result<(), Error> {
     // Only process pull_request events
     if event_type != "pull_request" {
         info!("Ignoring non-pull_request event: {}", event_type);
@@ -48,6 +48,7 @@ pub async fn handle_event(event_type: &str, payload: &[u8]) -> Result<(), Error>
         &old_issue_keys,
         &payload.pull_request.html_url,
         &payload.action,
+        jira_client,
     )
     .await
 }
@@ -58,15 +59,10 @@ async fn process_issue_keys(
     old_keys: &[String],
     pr_url: &str,
     action: &str,
+    jira_client: JiraClient,
 ) -> Result<(), Error> {
-    // Create a checklist manipulator
-    let checklist_manipulator = match ChecklistManipulator::from_env() {
-        Ok(manipulator) => manipulator,
-        Err(e) => {
-            info!("Failed to create checklist manipulator: {}", e);
-            return Err(e);
-        }
-    };
+    // Create a checklist manipulator using the provided JiraClient
+    let checklist_manipulator = ChecklistManipulator::new(&jira_client);
 
     // For each current issue key, add the PR URL to the issue
     for key in current_keys {

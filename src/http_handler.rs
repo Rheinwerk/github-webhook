@@ -1,13 +1,14 @@
 use crate::error::Error as AppError;
 use crate::event_handler::handle_event;
 use crate::github::validate_signature;
+use crate::jira::JiraClient;
 use crate::types::{WebhookEventType, WebhookSecret};
 use lambda_http::{Body, Error, Request, Response};
 use std::env;
 use tracing::{error, info};
 
 /// Main handler for the Lambda function
-pub(crate) async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
+pub(crate) async fn function_handler(event: Request, jira_client: JiraClient) -> Result<Response<Body>, Error> {
     // Get the webhook secret from environment variables
     let webhook_secret = match get_webhook_secret() {
         Ok(secret) => secret,
@@ -54,7 +55,7 @@ pub(crate) async fn function_handler(event: Request) -> Result<Response<Body>, E
     }
 
     // Handle the event
-    match handle_event(event_type, body_bytes).await {
+    match handle_event(event_type, body_bytes, jira_client).await {
         Ok(_) => {
             info!("Successfully processed event");
             Ok(create_success_response())
