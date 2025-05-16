@@ -1,6 +1,32 @@
-# Introduction
+# GitHub Hook Lambda
 
-github-hook-lambda is a Rust project that implements an AWS Lambda function in Rust.
+GitHub Hook Lambda is an AWS Lambda function that processes GitHub webhooks for pull requests and updates related Jira issues. When a pull request is created or its title is updated, the Lambda function extracts issue keys from the PR title and adds a link to the PR in the corresponding Jira issues' checklist field.
+
+## Features
+
+- Validates GitHub webhook signatures for security
+- Extracts issue keys from PR titles (format: `[ISSUE-123,ISSUE-234] Description`)
+- Updates Jira issues with links to pull requests
+- Handles title changes by updating affected Jira issues
+- Robust error handling and logging
+
+## Configuration
+
+The Lambda function requires the following environment variables:
+
+- `WEBHOOK_SECRET`: Secret for GitHub webhook validation
+- `JIRA_API_TOKEN`: Token for Jira API authentication
+- `JIRA_BASE_URL`: Base URL for the Jira instance (e.g., `https://your-company.atlassian.net`)
+- `JIRA_USER_EMAIL`: Email for Jira API authentication
+
+## GitHub Webhook Setup
+
+1. In your GitHub repository, go to Settings > Webhooks > Add webhook
+2. Set the Payload URL to your deployed Lambda function URL
+3. Set Content type to `application/json`
+4. Set the Secret to the same value as your `WEBHOOK_SECRET` environment variable
+5. Select "Let me select individual events" and choose only "Pull requests"
+6. Ensure the webhook is active and click "Add webhook"
 
 ## Prerequisites
 
