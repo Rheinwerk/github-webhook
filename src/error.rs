@@ -11,18 +11,24 @@ pub enum Error {
     #[error("Missing webhook signature header")]
     MissingSignatureHeader,
 
-    #[error("Failed to parse webhook payload: {0}")]
-    PayloadParseError(String),
+    #[error("Failed to deserialize payload")]
+    PayloadDeserialization(#[from] serde_json::Error),
 
     #[error("Jira API error: {0}")]
-    JiraApiError(String),
+    JiraApi(String),
+    
+    #[error("Failed to generate url for request")]
+    BadUrlGenerated(#[from] url::ParseError),
 
     #[error("HTTP client error: {0}")]
-    HttpClientError(String),
+    HttpClient(#[from] reqwest::Error),
 
-    #[error("Environment variable not set: {0}")]
-    EnvVarNotSet(String),
+    #[error("Environment variable not set: {env_var_name}")]
+    EnvVarNotSet { env_var_name: &'static str },
+
+    #[error("Environment variable {env_var_name} has bad value")]
+    EnvVarBadValue { env_var_name: &'static str },
 
     #[error("Internal error: {0}")]
-    InternalError(String),
+    Internal(String),
 }

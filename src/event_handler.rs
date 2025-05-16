@@ -1,81 +1,44 @@
 use crate::error::Error;
 use crate::github::models::{extract_issue_keys, PullRequestPayload};
 use crate::jira::{ChecklistManipulator, JiraClient};
-use tracing::{debug, info};
 
 pub async fn handle_event(
     event_type: &str,
     payload: &[u8],
     jira_client: JiraClient,
+    dry_run: bool,
 ) -> Result<(), Error> {
     if event_type != "pull_request" {
-        info!("Ignoring non-pull_request event: {}", event_type);
+        tracing::info!("Ignoring non-pull_request event: {}", event_type);
         return Ok(());
     }
 
-    let payload: PullRequestPayload =
-        serde_json::from_slice(payload).map_err(|e| Error::PayloadParseError(e.to_string()))?;
+    let payload: PullRequestPayload = serde_json::from_slice(payload)?;
 
-    info!(
-        "Processing pull_request event: action={}, number={}",
-        payload.action, payload.pull_request.number
+    tracing::info!(
+        payload.action,
+        payload.pull_request.number,
+        "Processing pull_request event",
     );
 
     let current_issue_keys = extract_issue_keys(&payload.pull_request.title);
-    debug!("Current issue keys: {:?}", current_issue_keys);
 
-    let old_issue_keys = if payload.action == "edited" {
-        if let Some(changes) = &payload.changes {
-            if let Some(title_change) = &changes.title {
-                let keys = extract_issue_keys(&title_change.from);
-                debug!("Old issue keys: {:?}", keys);
-                keys
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
-
-    process_issue_keys(
-        &current_issue_keys,
-        &old_issue_keys,
-        &payload.pull_request.html_url,
-        &payload.action,
-        jira_client,
-    )
-    .await
-}
-
-async fn process_issue_keys(
-    current_keys: &[String],
-    old_keys: &[String],
-    pr_url: &str,
-    action: &str,
-    jira_client: JiraClient,
-) -> Result<(), Error> {
-    let checklist_manipulator = ChecklistManipulator::new(&jira_client);
-
-    for key in current_keys {
-        info!("Adding PR link to issue: {}", key);
-        if let Err(e) = checklist_manipulator.add_pr_url(key, pr_url).await {
-            info!("Failed to add PR link to issue {}: {}", key, e);
-        }
-    }
-
-    if action == "edited" && !old_keys.is_empty() {
-        let removed_keys: Vec<&String> = old_keys
-            .iter()
-            .filter(|key| !current_keys.contains(key))
-            .collect();
-
-        for key in removed_keys {
-            info!("Removing PR link from issue: {}", key);
-            if let Err(e) = checklist_manipulator.remove_pr_url(key, pr_url).await {
-                info!("Failed to remove PR link from issue {}: {}", key, e);
+    for issue_key in current_issue_keys {
+        let issue = jira_client.get_issue(issue_key).await?;
+        if let Some(checklist) = &issue.fields.checklist.text() {
+            let mut cm = ChecklistManipulator::new(checklist);
+            if cm.push_pr(&payload.pull_request.html_url) {
+                if dry_run {
+                    tracing::info!(
+                        issue_key,
+                        pull_request = payload.pull_request.html_url,
+                        "dry run mode. would have updated issue"
+                    )
+                } else {
+                    jira_client
+                        .update_checklist(issue_key, cm.to_string())
+                        .await?
+                }
             }
         }
     }

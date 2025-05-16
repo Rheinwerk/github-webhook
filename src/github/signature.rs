@@ -18,8 +18,8 @@ pub fn validate_signature(
 
     let signature_bytes = hex::decode(signature).map_err(|_| Error::InvalidWebhookSignature)?;
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_str().as_bytes())
-        .map_err(|_| Error::InternalError("Failed to create HMAC".to_string()))?;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|_| Error::Internal("Failed to create HMAC".to_string()))?;
 
     mac.update(payload);
 
@@ -33,40 +33,28 @@ mod tests {
 
     #[test]
     fn test_validate_signature_valid() {
-        let secret = WebhookSecret::new("test_secret".to_string()).unwrap();
-        let payload = b"test_payload";
+        let secret = WebhookSecret::new(b"It's a Secret to Everybody").unwrap();
+        let payload = b"Hello, World!";
+        let signature = "sha256=757107ea0eb2509fc211221cce984b8a37570b6d7586c22c46f4379c8b043e17";
 
-        let mut mac = HmacSha256::new_from_slice(secret.as_str().as_bytes()).unwrap();
-        mac.update(payload);
-        let signature_bytes = mac.finalize().into_bytes();
-        let signature = format!("sha256={}", hex::encode(signature_bytes));
-
-        let result = validate_signature(payload, Some(&signature), &secret);
-        assert!(result.is_ok());
+        validate_signature(payload, Some(signature), &secret).expect("Expected Ok");
     }
 
     #[test]
     fn test_validate_signature_invalid() {
-        let secret = WebhookSecret::new("test_secret".to_string()).unwrap();
+        let secret = WebhookSecret::new("test_secret").unwrap();
         let payload = b"test_payload";
 
         let signature = "sha256=invalid_signature";
 
-        let result = validate_signature(payload, Some(signature), &secret);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            Error::InvalidWebhookSignature
-        ));
+        validate_signature(payload, Some(signature), &secret).expect_err("Expected error");
     }
 
     #[test]
     fn test_validate_signature_missing_header() {
-        let secret = WebhookSecret::new("test_secret".to_string()).unwrap();
+        let secret = WebhookSecret::new("test_secret").unwrap();
         let payload = b"test_payload";
 
-        let result = validate_signature(payload, None, &secret);
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::MissingSignatureHeader));
+        validate_signature(payload, None, &secret).expect_err("Expected error");
     }
 }

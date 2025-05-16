@@ -1,24 +1,16 @@
-use crate::error::Error as AppError;
 use crate::event_handler::handle_event;
 use crate::github::validate_signature;
 use crate::jira::JiraClient;
 use crate::types::{WebhookEventType, WebhookSecret};
 use lambda_http::{Body, Error, Request, Response};
-use std::env;
 use tracing::{error, info};
 
 pub(crate) async fn function_handler(
     event: Request,
+    dry_run: bool,
+    webhook_secret: WebhookSecret,
     jira_client: JiraClient,
 ) -> Result<Response<Body>, Error> {
-    let webhook_secret = match get_webhook_secret() {
-        Ok(secret) => secret,
-        Err(e) => {
-            error!("Failed to get webhook secret: {}", e);
-            return Ok(create_error_response(500, "Internal server error"));
-        }
-    };
-
     let event_type = event
         .headers()
         .get("X-GitHub-Event")
@@ -49,7 +41,7 @@ pub(crate) async fn function_handler(
         return Ok(create_success_response());
     }
 
-    match handle_event(event_type, body_bytes, jira_client).await {
+    match handle_event(event_type, body_bytes, jira_client, dry_run).await {
         Ok(_) => {
             info!("Successfully processed event");
             Ok(create_success_response())
@@ -59,12 +51,6 @@ pub(crate) async fn function_handler(
             Ok(create_error_response(500, "Failed to process event"))
         }
     }
-}
-
-fn get_webhook_secret() -> Result<WebhookSecret, AppError> {
-    let secret = env::var("WEBHOOK_SECRET")
-        .map_err(|_| AppError::EnvVarNotSet("WEBHOOK_SECRET".to_string()))?;
-    WebhookSecret::new(secret)
 }
 
 fn create_success_response() -> Response<Body> {
@@ -96,8 +82,6 @@ fn create_error_response(status: u16, message: &str) -> Response<Body> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
-    
 
     #[test]
     fn test_create_success_response() {

@@ -9,62 +9,63 @@ pub struct JiraIssue {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct JiraFields {
     #[serde(rename = "customfield_10369")]
-    pub checklist: Option<ChecklistField>,
+    pub checklist: ContentNode,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ChecklistField {
-    #[serde(rename = "type")]
-    pub doc_type: String,
-    pub version: i32,
-    pub content: Vec<ContentNode>,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentNode {
+    Doc {
+        content: Vec<ContentNode>,
+        version: i32,
+    },
+    Paragraph {
+        content: Vec<ContentNode>,
+    },
+    Text {
+        text: String,
+    },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ContentNode {
-    #[serde(rename = "type")]
-    pub node_type: String,
-    pub content: Option<Vec<ContentNode>>,
-    pub attrs: Option<NodeAttributes>,
-    pub text: Option<String>,
-    pub marks: Option<Vec<Mark>>,
-}
+impl ContentNode {
+    /// This is the format used by the checklists custom field
+    pub fn new_doc_paragraph_text(text: String) -> Self {
+        Self::Doc {
+            content: vec![Self::Paragraph {
+                content: vec![Self::Text { text }],
+            }],
+            version: 1,
+        }
+    }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct NodeAttributes {
-    pub level: Option<i32>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Mark {
-    #[serde(rename = "type")]
-    pub mark_type: String,
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Self::Text { text } => Some(text),
+            Self::Doc { content, .. } | Self::Paragraph { content } => {
+                content.first().and_then(|node| node.text())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
-pub struct JiraCredentials {
+pub struct JiraConfig {
     pub email: String,
     pub api_token: String,
-    pub base_url: String,
+    pub base_url: reqwest::Url,
 }
 
-impl JiraCredentials {
-    pub fn from_env() -> Result<Self, crate::error::Error> {
-        use std::env;
+#[cfg(test)]
+mod test {
+    use super::JiraIssue;
 
-        let email = env::var("JIRA_USER_EMAIL")
-            .map_err(|_| crate::error::Error::EnvVarNotSet("JIRA_USER_EMAIL".to_string()))?;
+    fn sample_issue() -> JiraIssue {
+        let json = r##"{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"1337","self":"https://example.atlassian.net/rest/api/3/issue/1337","key":"TEST-7","fields":{"customfield_10369":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"# Development Process\n-! Task 1: Detail Planning including Risk Assessment\n-! Task 2: Document Risk Assessment\n-! Task 3: Create Feature Branch\n-! Task 4: Development including Tests and Documentation\n-! Task 5: Create Pull Request and Request Review\n-! Task 6: Request Functional Acceptance\n-! Task 7: Prepare Deployment\n-! Task 8: Request Deployment/Merge Approval\n-! Task 9: Merge Pull Request\n-! Task 10: Execute Deployment\n-! Task 11: Verify Production Delivery\n# Pull Requests\n"}]}]}}}"##;
+        serde_json::from_str(json).expect("failed to deserialize")
+    }
 
-        let api_token = env::var("JIRA_API_TOKEN")
-            .map_err(|_| crate::error::Error::EnvVarNotSet("JIRA_API_TOKEN".to_string()))?;
-
-        let base_url = env::var("JIRA_BASE_URL")
-            .map_err(|_| crate::error::Error::EnvVarNotSet("JIRA_BASE_URL".to_string()))?;
-
-        Ok(Self {
-            email,
-            api_token,
-            base_url,
-        })
+    #[test]
+    fn deserializes() {
+        sample_issue();
     }
 }

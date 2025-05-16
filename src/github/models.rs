@@ -25,21 +25,20 @@ pub struct TitleChange {
     pub from: String,
 }
 
-pub fn extract_issue_keys(title: &str) -> Vec<String> {
-    let re = regex::Regex::new(r"^\[([\w\-,\s]+)\]").unwrap();
+pub fn extract_issue_keys(title: &str) -> Vec<&str> {
+    let re = regex::Regex::new(r"^\[([\w\-,\s]+)]").unwrap();
 
-    if let Some(captures) = re.captures(title) {
-        if let Some(keys_str) = captures.get(1) {
-            return keys_str
+    re.captures(title)
+        .and_then(|captures| captures.get(1))
+        .map(|keys_str| {
+            keys_str
                 .as_str()
                 .split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
-                .collect();
-        }
-    }
-
-    Vec::new()
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

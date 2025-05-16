@@ -1,18 +1,19 @@
 use crate::error::Error;
 
 #[derive(Clone, Debug)]
-pub struct WebhookSecret(String);
+pub struct WebhookSecret(Vec<u8>);
 
 impl WebhookSecret {
-    pub fn new(secret: String) -> Result<Self, Error> {
+    pub fn new(secret: impl Into<Vec<u8>>) -> Result<Self, Error> {
+        let secret = secret.into();
         if secret.is_empty() {
             return Err(Error::EmptyWebhookSecret);
         }
         Ok(Self(secret))
     }
 
-    pub fn as_str(&self) -> &str {
-        &self.0
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_slice()
     }
 }
 
