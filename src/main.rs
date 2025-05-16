@@ -4,6 +4,7 @@ mod error;
 mod event_handler;
 mod github;
 mod http_handler;
+mod jira;
 mod types;
 
 use http_handler::function_handler;
