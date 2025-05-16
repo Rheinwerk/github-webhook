@@ -7,9 +7,10 @@ use lambda_http::{Body, Error, Request, Response};
 use std::env;
 use tracing::{error, info};
 
-/// Main handler for the Lambda function
-pub(crate) async fn function_handler(event: Request, jira_client: JiraClient) -> Result<Response<Body>, Error> {
-    // Get the webhook secret from environment variables
+pub(crate) async fn function_handler(
+    event: Request,
+    jira_client: JiraClient,
+) -> Result<Response<Body>, Error> {
     let webhook_secret = match get_webhook_secret() {
         Ok(secret) => secret,
         Err(e) => {
@@ -18,20 +19,17 @@ pub(crate) async fn function_handler(event: Request, jira_client: JiraClient) ->
         }
     };
 
-    // Get the event type from the X-GitHub-Event header
     let event_type = event
         .headers()
         .get("X-GitHub-Event")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    // Get the signature from the X-Hub-Signature-256 header
     let signature = event
         .headers()
         .get("X-Hub-Signature-256")
         .and_then(|v| v.to_str().ok());
 
-    // Get the request body
     let body = event.body();
     let body_bytes = match body {
         Body::Text(text) => text.as_bytes(),
@@ -39,22 +37,18 @@ pub(crate) async fn function_handler(event: Request, jira_client: JiraClient) ->
         Body::Empty => &[],
     };
 
-    // Validate the signature
     if let Err(e) = validate_signature(body_bytes, signature, &webhook_secret) {
         error!("Signature validation failed: {}", e);
         return Ok(create_error_response(401, "Invalid signature"));
     }
 
-    // Create webhook event type
     let webhook_event = WebhookEventType::from_str(event_type);
 
-    // Return 200 for non-pull_request events
     if !webhook_event.is_pull_request() {
         info!("Ignoring non-pull_request event: {}", event_type);
         return Ok(create_success_response());
     }
 
-    // Handle the event
     match handle_event(event_type, body_bytes, jira_client).await {
         Ok(_) => {
             info!("Successfully processed event");
@@ -67,14 +61,12 @@ pub(crate) async fn function_handler(event: Request, jira_client: JiraClient) ->
     }
 }
 
-/// Get the webhook secret from environment variables
 fn get_webhook_secret() -> Result<WebhookSecret, AppError> {
     let secret = env::var("WEBHOOK_SECRET")
         .map_err(|_| AppError::EnvVarNotSet("WEBHOOK_SECRET".to_string()))?;
     WebhookSecret::new(secret)
 }
 
-/// Create a success response
 fn create_success_response() -> Response<Body> {
     Response::builder()
         .status(200)
@@ -88,7 +80,6 @@ fn create_success_response() -> Response<Body> {
         })
 }
 
-/// Create an error response
 fn create_error_response(status: u16, message: &str) -> Response<Body> {
     Response::builder()
         .status(status)
