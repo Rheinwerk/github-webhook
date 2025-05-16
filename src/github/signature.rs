@@ -2,7 +2,6 @@ use crate::error::Error;
 use crate::types::WebhookSecret;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use std::str::FromStr;
 
 type HmacSha256 = Hmac<Sha256>;
 

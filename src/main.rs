@@ -1,3 +1,4 @@
+#![deny(unused)]
 use lambda_http::{run, service_fn, tracing, Error};
 
 mod error;

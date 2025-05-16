@@ -96,8 +96,8 @@ fn create_error_response(status: u16, message: &str) -> Response<Body> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lambda_http::http::HeaderMap;
-    use std::collections::HashMap;
+    
+    
 
     #[test]
     fn test_create_success_response() {

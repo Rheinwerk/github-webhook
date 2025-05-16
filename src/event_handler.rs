@@ -1,7 +1,6 @@
 use crate::error::Error;
 use crate::github::models::{extract_issue_keys, PullRequestPayload};
 use crate::jira::{ChecklistManipulator, JiraClient};
-use serde_json::Value;
 use tracing::{debug, info};
 
 pub async fn handle_event(
@@ -102,7 +101,6 @@ mod tests {
             changes: None,
         };
 
-        let payload_json = serde_json::to_vec(&payload).unwrap();
         let keys = extract_issue_keys(&payload.pull_request.title);
         assert_eq!(keys, vec!["ISSUE-123", "ISSUE-234"]);
     }

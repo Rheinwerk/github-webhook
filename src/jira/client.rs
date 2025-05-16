@@ -23,10 +23,12 @@ impl JiraClient {
     }
 
     fn create_headers(&self) -> Result<HeaderMap, Error> {
+        use base64::{engine::general_purpose::STANDARD as Base64, Engine as _};
+
         let mut headers = HeaderMap::new();
 
         let auth = format!("{}:{}", self.credentials.email, self.credentials.api_token);
-        let auth_header = format!("Basic {}", base64::encode(auth));
+        let auth_header = format!("Basic {}", Base64.encode(auth));
 
         headers.insert(
             AUTHORIZATION,

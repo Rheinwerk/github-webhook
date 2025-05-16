@@ -14,9 +14,6 @@ pub enum Error {
     #[error("Failed to parse webhook payload: {0}")]
     PayloadParseError(String),
 
-    #[error("GitHub API error: {0}")]
-    GitHubApiError(String),
-
     #[error("Jira API error: {0}")]
     JiraApiError(String),
 
@@ -25,9 +22,6 @@ pub enum Error {
 
     #[error("Environment variable not set: {0}")]
     EnvVarNotSet(String),
-
-    #[error("Failed to parse Jira field: {0}")]
-    JiraFieldParseError(String),
 
     #[error("Internal error: {0}")]
     InternalError(String),
