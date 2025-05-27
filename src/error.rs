@@ -16,7 +16,7 @@ pub enum Error {
 
     #[error("Jira API error: {0}")]
     JiraApi(String),
-    
+
     #[error("Failed to generate url for request")]
     BadUrlGenerated(#[from] url::ParseError),
 
@@ -28,6 +28,9 @@ pub enum Error {
 
     #[error("Environment variable {env_var_name} has bad value")]
     EnvVarBadValue { env_var_name: &'static str },
+
+    #[error("AWS KMS error: {0:?}")]
+    AwsKms(#[from] aws_sdk_kms::Error),
 
     #[error("Internal error: {0}")]
     Internal(String),

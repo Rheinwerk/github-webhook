@@ -11,8 +11,10 @@ mod types;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing::init_default_subscriber();
+    let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::v2025_01_17()).await;
+    let aws_kms = aws_sdk_kms::Client::new(&aws_config);
 
-    let config = config::Config::from_env()?;
+    let config = config::Config::from_env(&aws_kms).await?;
 
     let jira_client = jira::JiraClient::new(config.jira_config);
 

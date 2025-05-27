@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::jira::models::JiraConfig;
 use crate::types::WebhookSecret;
+use aws_sdk_kms::primitives::Blob;
 
 pub struct Config {
     pub dry_run: bool,
@@ -10,12 +11,14 @@ pub struct Config {
 
 const DRY_RUN: &str = "DRY_RUN";
 const WEBHOOK_SECRET: &str = "WEBHOOK_SECRET";
+const WEBHOOK_SECRET_KMS: &str = "WEBHOOK_SECRET_KMS";
 const JIRA_URL: &str = "JIRA_URL";
 const JIRA_EMAIL: &str = "JIRA_EMAIL";
 const JIRA_TOKEN: &str = "JIRA_TOKEN";
+const JIRA_TOKEN_KMS: &str = "JIRA_TOKEN_KMS";
 
 impl Config {
-    pub fn from_env() -> Result<Self, Error> {
+    pub async fn from_env(aws_kms: &aws_sdk_kms::Client) -> Result<Self, Error> {
         use std::env::{var, VarError};
 
         let dry_run = match var(DRY_RUN) {
@@ -24,18 +27,14 @@ impl Config {
             Err(VarError::NotUnicode(var)) => !var.is_empty(),
         };
 
-        let webhook_secret = var(WEBHOOK_SECRET)
-            .map_err(|_| Error::EnvVarNotSet {
-                env_var_name: WEBHOOK_SECRET,
-            })
+        let webhook_secret = get_encrypted_var(WEBHOOK_SECRET, WEBHOOK_SECRET_KMS, &aws_kms)
+            .await
             .and_then(WebhookSecret::new)?;
 
         let jira_email = var(JIRA_EMAIL).map_err(|_| Error::EnvVarNotSet {
             env_var_name: JIRA_EMAIL,
         })?;
-        let jira_token = var(JIRA_TOKEN).map_err(|_| Error::EnvVarNotSet {
-            env_var_name: JIRA_TOKEN,
-        })?;
+        let jira_token = get_encrypted_var(JIRA_TOKEN, JIRA_TOKEN_KMS, &aws_kms).await?;
         let jira_url = var(JIRA_URL)
             .map_err(|_| Error::EnvVarNotSet {
                 env_var_name: JIRA_URL,
@@ -63,4 +62,30 @@ impl Config {
             dry_run,
         })
     }
+}
+
+async fn get_encrypted_var(
+    plain_text_name: &'static str,
+    encrypted_name: &'static str,
+    aws_kms: &aws_sdk_kms::Client,
+) -> Result<String, Error> {
+    if let Ok(encrypted_value) = std::env::var(encrypted_name) {
+        let decrypted = aws_kms
+            .decrypt()
+            .ciphertext_blob(Blob::from(encrypted_value.as_bytes()))
+            .send()
+            .await
+            .map_err(|e| Error::AwsKms(e.into()))?;
+
+        let decrypted = decrypted.plaintext().ok_or(Error::Internal(
+            "decrypted value had no plain text".to_string(),
+        ))?;
+
+        return Ok(String::from_utf8_lossy(decrypted.as_ref()).to_string());
+    };
+
+    // fall back to plain text
+    std::env::var(plain_text_name).map_err(|_| Error::EnvVarNotSet {
+        env_var_name: plain_text_name,
+    })
 }
