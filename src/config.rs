@@ -70,9 +70,12 @@ async fn get_encrypted_var(
     aws_kms: &aws_sdk_kms::Client,
 ) -> Result<String, Error> {
     if let Ok(encrypted_value) = std::env::var(encrypted_name) {
+        use base64::{engine::general_purpose::STANDARD as Base64, Engine as _};
+        let encrypted_bytes = Base64.decode(encrypted_value).map_err(|_| Error::EnvVarBadValue { env_var_name: encrypted_name })?;
+
         let decrypted = aws_kms
             .decrypt()
-            .ciphertext_blob(Blob::from(encrypted_value.as_bytes()))
+            .ciphertext_blob(Blob::from(encrypted_bytes))
             .send()
             .await
             .map_err(|e| Error::AwsKms(e.into()))?;
