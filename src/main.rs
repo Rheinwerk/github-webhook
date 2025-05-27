@@ -1,4 +1,3 @@
-#![deny(clippy::pedantic)]
 use lambda_http::{run, service_fn, tracing, Error};
 
 mod config;
