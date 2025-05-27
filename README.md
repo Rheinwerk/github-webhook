@@ -14,10 +14,18 @@ title and adds a link to the PR in the corresponding Jira issues' checklist fiel
 
 The Lambda function requires the following environment variables:
 
-- `WEBHOOK_SECRET`: Secret for GitHub webhook validation
-- `JIRA_API_TOKEN`: Token for Jira API authentication
+
+- `RUST_LOG`: Controls logging
+
+- `DRY_RUN`: Disables issue mutation (must be set to a nonemtpy value)
+
 - `JIRA_BASE_URL`: Base URL for the Jira instance (e.g., `https://your-company.atlassian.net`)
 - `JIRA_USER_EMAIL`: Email for Jira API authentication
+- `JIRA_API_TOKEN`: Token for Jira API authentication
+- `JIRA_API_TOKEN`: Token for Jira API authentication, AWS KMS encrypted
+
+- `WEBHOOK_SECRET`: Secret for GitHub webhook validation
+- `WEBHOOK_SECRET_KMS`: Secret for GitHub webhook validation, AWS KMS encrypted
 
 ## Prerequisites
 
@@ -26,8 +34,7 @@ The Lambda function requires the following environment variables:
 
 ## Building
 
-To build the project for production, run `cargo lambda build --release`. Remove the `--release` flag to build for
-development.
+To build the project for production, run `cargo lambda build --release --output-format zip --arm64`.
 
 Read more about building your lambda function
 in [the Cargo Lambda documentation](https://www.cargo-lambda.info/commands/build.html).
