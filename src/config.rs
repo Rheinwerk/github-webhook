@@ -71,7 +71,12 @@ async fn get_encrypted_var(
 ) -> Result<String, Error> {
     if let Ok(encrypted_value) = std::env::var(encrypted_name) {
         use base64::{engine::general_purpose::STANDARD as Base64, Engine as _};
-        let encrypted_bytes = Base64.decode(encrypted_value).map_err(|_| Error::EnvVarBadValue { env_var_name: encrypted_name })?;
+        let encrypted_bytes =
+            Base64
+                .decode(encrypted_value)
+                .map_err(|_| Error::EnvVarBadValue {
+                    env_var_name: encrypted_name,
+                })?;
 
         let decrypted = aws_kms
             .decrypt()

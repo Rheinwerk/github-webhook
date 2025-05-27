@@ -68,7 +68,10 @@ impl JiraClient {
         issue_key: &str,
         checklist: impl ToString,
     ) -> Result<(), Error> {
-        let url = self.config.base_url.join(&format!("rest/api/3/issue/{}", issue_key))?;
+        let url = self
+            .config
+            .base_url
+            .join(&format!("rest/api/3/issue/{}", issue_key))?;
 
         tracing::info!("Updating checklist for issue: {}", issue_key);
 
