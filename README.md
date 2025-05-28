@@ -22,7 +22,7 @@ The Lambda function requires the following environment variables:
 - `JIRA_BASE_URL`: Base URL for the Jira instance (e.g., `https://your-company.atlassian.net`)
 - `JIRA_USER_EMAIL`: Email for Jira API authentication
 - `JIRA_API_TOKEN`: Token for Jira API authentication
-- `JIRA_API_TOKEN`: Token for Jira API authentication, AWS KMS encrypted
+- `JIRA_API_TOKEN_KMS`: Token for Jira API authentication, AWS KMS encrypted
 
 - `WEBHOOK_SECRET`: Secret for GitHub webhook validation
 - `WEBHOOK_SECRET_KMS`: Secret for GitHub webhook validation, AWS KMS encrypted
