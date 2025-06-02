@@ -26,6 +26,7 @@ pub struct TitleChange {
 }
 
 pub fn extract_issue_keys(title: &str) -> Vec<&str> {
+    // I have never seen a PR title with several ticket reverences in it - where does the requirement come from?
     let re = regex::Regex::new(r"^\[([\w\-,\s]+)]").unwrap();
 
     re.captures(title)

@@ -8,6 +8,7 @@ pub async fn handle_event(
     jira_client: JiraClient,
     dry_run: bool,
 ) -> Result<(), Error> {
+    // this was already checked in http_handlers - is it necessary to check again?
     if event_type != "pull_request" {
         tracing::info!("Ignoring non-pull_request event: {}", event_type);
         return Ok(());
@@ -40,7 +41,7 @@ pub async fn handle_event(
                         .await?
                 }
             }
-        }
+        } // In general you are very detailed with tracing - why not here?
     }
 
     Ok(())

@@ -14,10 +14,12 @@ impl ChecklistManipulator {
             .iter()
             .any(|item| item.ends_with("Pull Requests"))
         {
+            // Why is there no tracing here? In general you are very detailed with it.
             return false;
         }
 
         if self.checklist.iter().any(|item| item.ends_with(pr_url)) {
+            // Why is there no tracing here? In general you are very detailed with it.
             return false;
         }
 
@@ -25,6 +27,9 @@ impl ChecklistManipulator {
         true
     }
 
+    // this is only used in test-code - is that intended? Was it forgotten to be wired up?
+    // the functionality is defined in the requirements but not actually implementemented
+    // we can leave it out for now - I was just wondering
     pub fn pop_pr(&mut self, pr_url: &str) -> bool {
         let old_size = self.checklist.len();
         self.checklist.retain(|item| !item.ends_with(pr_url));
