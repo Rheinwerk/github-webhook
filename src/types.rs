@@ -30,8 +30,4 @@ impl WebhookEventType {
             other => Self::Other(other.to_string()),
         }
     }
-
-    pub fn is_pull_request(&self) -> bool {
-        matches!(self, Self::PullRequest)
-    }
 }

@@ -14,10 +14,12 @@ impl ChecklistManipulator {
             .iter()
             .any(|item| item.ends_with("Pull Requests"))
         {
+            tracing::warn!("Missing pull request section");
             return false;
         }
 
         if self.checklist.iter().any(|item| item.ends_with(pr_url)) {
+            tracing::debug!("Pull request already linked");
             return false;
         }
 

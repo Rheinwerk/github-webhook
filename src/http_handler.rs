@@ -1,105 +1,79 @@
-use crate::event_handler::handle_event;
-use crate::github::validate_signature;
-use crate::jira::JiraClient;
+use crate::error::*;
 use crate::types::{WebhookEventType, WebhookSecret};
-use lambda_http::{Body, Error, Request, Response};
-use tracing::{error, info};
+use crate::{github, jira};
 
 pub(crate) async fn function_handler(
-    event: Request,
-    dry_run: bool,
+    jira_client: jira::JiraClient,
     webhook_secret: WebhookSecret,
-    jira_client: JiraClient,
-) -> Result<Response<Body>, Error> {
+    event: lambda_http::Request,
+    dry_run: bool,
+) -> Result<()> {
+    let signature = event
+        .headers()
+        .get("X-Hub-Signature-256")
+        .and_then(|v| v.to_str().ok());
+
+    use lambda_http::Body;
+    let body_bytes = match event.body() {
+        Body::Text(text) => text.as_bytes(),
+        Body::Binary(bytes) => bytes,
+        Body::Empty => &[],
+    };
+
+    github::validate_signature(body_bytes, signature, &webhook_secret)?;
+
     let event_type = event
         .headers()
         .get("X-GitHub-Event")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let signature = event
-        .headers()
-        .get("X-Hub-Signature-256")
-        .and_then(|v| v.to_str().ok());
+    match WebhookEventType::from_str(event_type) {
+        WebhookEventType::PullRequest => {
+            let payload = serde_json::from_slice(body_bytes)?;
+            crate::event_handler::handle_pull_request_event(payload, jira_client, dry_run).await
+        }
+        WebhookEventType::Other(event_type) => Err(Error::InvalidEventType(event_type)),
+    }
+}
 
-    let body = event.body();
-    let body_bytes = match body {
-        Body::Text(text) => text.as_bytes(),
-        Body::Binary(bytes) => bytes,
-        Body::Empty => &[],
+pub(crate) fn result_to_http_reponse(response: Result<()>) -> LambdaResult {
+    let Err(error) = response else {
+        return LambdaResult::ok_response();
     };
 
-    if let Err(e) = validate_signature(body_bytes, signature, &webhook_secret) {
-        error!("Signature validation failed: {}", e);
-        return Ok(create_error_response(401, "Invalid signature"));
-    }
+    tracing::trace!(?error, "function handler error occurred");
 
-    let webhook_event = WebhookEventType::from_str(event_type);
-
-    if !webhook_event.is_pull_request() {
-        info!("Ignoring non-pull_request event: {}", event_type);
-        return Ok(create_success_response());
-    }
-
-    match handle_event(event_type, body_bytes, jira_client, dry_run).await {
-        Ok(_) => {
-            info!("Successfully processed event");
-            Ok(create_success_response())
+    use crate::error::Error::*;
+    match error {
+        // configuration mistakes, we should never see those here
+        BadUrlGenerated(_) | EmptyWebhookSecret | EnvVarNotSet { .. } | EnvVarBadValue { .. } => {
+            panic!("Configuration error: {:?}", error);
         }
-        Err(e) => {
-            error!("Failed to process event: {}", e);
-            Ok(create_error_response(500, "Failed to process event"))
+
+        // possible configuration mistake on GitHub
+        InvalidEventType(event_type) => {
+            tracing::warn!("Received event type that was unexpected: {}", event_type);
+
+            // return 200, because technically everything went well
+            return LambdaResult::ok_response();
         }
-    }
-}
 
-fn create_success_response() -> Response<Body> {
-    Response::builder()
-        .status(200)
-        .header("content-type", "application/json")
-        .body(r#"{"status":"success"}"#.into())
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(500)
-                .body("Internal server error".into())
-                .unwrap()
-        })
-}
+        // request validation errors
+        MissingSignatureHeader | InvalidWebhookSignature | PayloadDeserialization(_) => {
+            tracing::warn!("Request validation error: {:?}", error);
+        }
 
-fn create_error_response(status: u16, message: &str) -> Response<Body> {
-    Response::builder()
-        .status(status)
-        .header("content-type", "application/json")
-        .body(format!(r#"{{"status":"error","message":"{}"}}"#, message).into())
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(500)
-                .body("Internal server error".into())
-                .unwrap()
-        })
-}
+        // API errors
+        JiraApi(_) | HttpClient(_) | AwsKms(_) => {
+            tracing::error!("API error: {:?}", error);
+        }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        // other kinds of errors
+        Internal(_) => {
+            tracing::error!("Internal error: {:?}", error);
+        }
+    };
 
-    #[test]
-    fn test_create_success_response() {
-        let response = create_success_response();
-        assert_eq!(response.status(), 200);
-
-        let body_bytes = response.body().to_vec();
-        let body_string = String::from_utf8(body_bytes).unwrap();
-        assert_eq!(body_string, r#"{"status":"success"}"#);
-    }
-
-    #[test]
-    fn test_create_error_response() {
-        let response = create_error_response(400, "Bad request");
-        assert_eq!(response.status(), 400);
-
-        let body_bytes = response.body().to_vec();
-        let body_string = String::from_utf8(body_bytes).unwrap();
-        assert_eq!(body_string, r#"{"status":"error","message":"Bad request"}"#);
-    }
+    LambdaResult::not_ok_response()
 }
