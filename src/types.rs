@@ -1,6 +1,6 @@
 use crate::error::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct WebhookSecret(Vec<u8>);
 
 impl WebhookSecret {
