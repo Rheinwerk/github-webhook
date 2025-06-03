@@ -25,12 +25,6 @@ impl ChecklistManipulator {
         true
     }
 
-    pub fn pop_pr(&mut self, pr_url: &str) -> bool {
-        let old_size = self.checklist.len();
-        self.checklist.retain(|item| !item.ends_with(pr_url));
-        old_size != self.checklist.len()
-    }
-
     pub fn to_string(&self) -> String {
         self.checklist.join("\n")
     }
@@ -63,19 +57,6 @@ mod tests {
         assert_eq!(
             &checklist.to_string(),
             "## Pull Requests\n- https://github.com/org/repo/pull/1\n- https://github.com/org/repo/pull/2"
-        );
-    }
-
-    #[test]
-    fn test_remove_pr() {
-        let mut checklist =
-            ChecklistManipulator::new("## Pull Requests\n- https://github.com/org/repo/pull/1\n- https://github.com/org/repo/pull/2");
-
-        checklist.pop_pr("https://github.com/org/repo/pull/1");
-
-        assert_eq!(
-            &checklist.to_string(),
-            "## Pull Requests\n- https://github.com/org/repo/pull/2"
         );
     }
 }
