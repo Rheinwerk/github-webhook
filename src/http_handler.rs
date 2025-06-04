@@ -29,6 +29,7 @@ pub(crate) async fn function_handler(
         .unwrap_or("");
 
     match WebhookEventType::from_str(event_type) {
+        WebhookEventType::Ping => Ok(()),
         WebhookEventType::PullRequest => {
             let payload = serde_json::from_slice(body_bytes)?;
             crate::event_handler::handle_pull_request_event(payload, jira_client, dry_run).await
