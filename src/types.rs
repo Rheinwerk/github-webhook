@@ -1,6 +1,6 @@
 use crate::error::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct WebhookSecret(Vec<u8>);
 
 impl WebhookSecret {
@@ -19,6 +19,7 @@ impl WebhookSecret {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum WebhookEventType {
+    Ping,
     PullRequest,
     Other(String),
 }
@@ -26,12 +27,9 @@ pub enum WebhookEventType {
 impl WebhookEventType {
     pub fn from_str(event_type: &str) -> Self {
         match event_type {
+            "ping" => Self::Ping,
             "pull_request" => Self::PullRequest,
             other => Self::Other(other.to_string()),
         }
-    }
-
-    pub fn is_pull_request(&self) -> bool {
-        matches!(self, Self::PullRequest)
     }
 }

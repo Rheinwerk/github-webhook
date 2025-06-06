@@ -1,5 +1,32 @@
 use thiserror::Error;
 
+pub type LambdaResult = std::result::Result<lambda_http::Response<lambda_http::Body>, LambdaError>;
+
+pub trait LambdaResultExt {
+    fn ok_response() -> LambdaResult {
+        use lambda_http::{http::StatusCode, Body, Response};
+
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::Empty)
+            .expect("Response body can be built"))
+    }
+
+    fn not_ok_response() -> LambdaResult {
+        use lambda_http::{http::StatusCode, Body, Response};
+
+        Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::Empty)
+            .expect("Response body can be built"))
+    }
+}
+impl LambdaResultExt for LambdaResult {}
+
+pub type LambdaError = lambda_http::Error;
+
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Empty webhook secret")]
@@ -34,4 +61,7 @@ pub enum Error {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Invalid event type {0}")]
+    InvalidEventType(String),
 }

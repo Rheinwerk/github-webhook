@@ -1,4 +1,4 @@
-use lambda_http::{run, service_fn, tracing, Error};
+use lambda_http::{run, service_fn, tracing};
 
 mod config;
 mod error;
@@ -9,7 +9,7 @@ mod jira;
 mod types;
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<(), lambda_http::Error> {
     tracing::init_default_subscriber();
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::v2025_01_17()).await;
     let aws_kms = aws_sdk_kms::Client::new(&aws_config);
@@ -22,7 +22,11 @@ async fn main() -> Result<(), Error> {
         let client = jira_client.clone();
         let webhook_secret = config.webhook_secret.clone();
 
-        http_handler::function_handler(event, config.dry_run, webhook_secret, client)
+        async move {
+            http_handler::result_to_http_reponse(
+                http_handler::function_handler(client, webhook_secret, event, config.dry_run).await,
+            )
+        }
     }))
     .await
 }

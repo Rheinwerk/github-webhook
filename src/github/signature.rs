@@ -24,7 +24,11 @@ pub fn validate_signature(
     mac.update(payload);
 
     mac.verify_slice(&signature_bytes)
-        .map_err(|_| Error::InvalidWebhookSignature)
+        .map_err(|_| Error::InvalidWebhookSignature)?;
+
+    tracing::trace!("Signature verified");
+
+    Ok(())
 }
 
 #[cfg(test)]
