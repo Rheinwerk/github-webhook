@@ -25,20 +25,15 @@ pub struct TitleChange {
     pub from: String,
 }
 
-pub fn extract_issue_keys(title: &str) -> Vec<&str> {
-    let re = regex::Regex::new(r"^\[([\w\-,\s]+)]").unwrap();
+pub fn extract_issue_key(title: &str) -> Option<String> {
+    let re = regex::Regex::new(r"^\[?([A-Za-z]+)[\- ]*([0-9]+)").unwrap();
 
     re.captures(title)
-        .and_then(|captures| captures.get(1))
-        .map(|keys_str| {
-            keys_str
-                .as_str()
-                .split(',')
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .collect()
+        .and_then(|captures| {
+            let prefix = captures.get(1)?.as_str().to_uppercase();
+            let number = captures.get(2)?.as_str();
+            Some(format!("{}-{}", prefix, number))
         })
-        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -46,30 +41,45 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_issue_keys_single() {
+    fn test_extract_issue_key_single() {
         let title = "[ISSUE-123] This is a test PR";
-        let keys = extract_issue_keys(title);
-        assert_eq!(keys, vec!["ISSUE-123"]);
+        let key = extract_issue_key(title);
+        assert_eq!(key, Some("ISSUE-123".to_string()));
     }
 
-    #[test]
-    fn test_extract_issue_keys_multiple() {
-        let title = "[ISSUE-123, ISSUE-234] This is a test PR";
-        let keys = extract_issue_keys(title);
-        assert_eq!(keys, vec!["ISSUE-123", "ISSUE-234"]);
-    }
 
     #[test]
-    fn test_extract_issue_keys_none() {
+    fn test_extract_issue_key_none() {
         let title = "This is a test PR without issue keys";
-        let keys = extract_issue_keys(title);
-        assert!(keys.is_empty());
+        let key = extract_issue_key(title);
+        assert!(key.is_none());
     }
 
     #[test]
-    fn test_extract_issue_keys_empty_brackets() {
+    fn test_extract_issue_key_empty_brackets() {
         let title = "[] This is a test PR with empty brackets";
-        let keys = extract_issue_keys(title);
-        assert!(keys.is_empty());
+        let key = extract_issue_key(title);
+        assert!(key.is_none());
+    }
+
+    #[test]
+    fn test_extract_issue_key_space_separated() {
+        let title = "Issue 51 - Fix authentication issue";
+        let key = extract_issue_key(title);
+        assert_eq!(key, Some("ISSUE-51".to_string()));
+    }
+
+    #[test]
+    fn test_extract_issue_key_hyphen_separated() {
+        let title = "Issue-51 Update user interface";
+        let key = extract_issue_key(title);
+        assert_eq!(key, Some("ISSUE-51".to_string()));
+    }
+
+    #[test]
+    fn test_extract_issue_key_bracketed_with_hyphen() {
+        let title = "[Issue-51] Implement new feature";
+        let key = extract_issue_key(title);
+        assert_eq!(key, Some("ISSUE-51".to_string()));
     }
 }

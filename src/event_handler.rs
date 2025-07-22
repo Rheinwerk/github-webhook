@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::github::models::{extract_issue_keys, PullRequestPayload};
+use crate::github::models::{extract_issue_key, PullRequestPayload};
 use crate::jira::{ChecklistManipulator, JiraClient};
 
 #[tracing::instrument(skip_all,fields(action = %payload.action, pull_request = %payload.pull_request.number))]
@@ -10,10 +10,10 @@ pub async fn handle_pull_request_event(
 ) -> Result<(), Error> {
     tracing::info!("Processing pull_request event");
 
-    for issue_key in extract_issue_keys(&payload.pull_request.title) {
+    if let Some(issue_key) = extract_issue_key(&payload.pull_request.title) {
         update_issue(
             &jira_client,
-            issue_key,
+            &issue_key,
             &payload.pull_request.html_url,
             dry_run,
         )
@@ -64,11 +64,11 @@ mod tests {
     use crate::github::models::{Changes, PullRequest, TitleChange};
 
     #[test]
-    fn test_extract_issue_keys_from_payload() {
+    fn test_extract_issue_key_from_payload() {
         let payload = PullRequestPayload {
             action: "opened".to_string(),
             pull_request: PullRequest {
-                title: "[ISSUE-123, ISSUE-234] Test PR".to_string(),
+                title: "[ISSUE-123] Test PR".to_string(),
                 html_url: "https://github.com/org/repo/pull/1".to_string(),
                 number: 1,
                 state: "open".to_string(),
@@ -76,12 +76,12 @@ mod tests {
             changes: None,
         };
 
-        let keys = extract_issue_keys(&payload.pull_request.title);
-        assert_eq!(keys, vec!["ISSUE-123", "ISSUE-234"]);
+        let key = extract_issue_key(&payload.pull_request.title);
+        assert_eq!(key, Some("ISSUE-123".to_string()));
     }
 
     #[test]
-    fn test_extract_old_issue_keys_from_edited_payload() {
+    fn test_extract_old_issue_key_from_edited_payload() {
         let payload = PullRequestPayload {
             action: "edited".to_string(),
             pull_request: PullRequest {
@@ -97,13 +97,13 @@ mod tests {
             }),
         };
 
-        let current_keys = extract_issue_keys(&payload.pull_request.title);
-        assert_eq!(current_keys, vec!["ISSUE-234"]);
+        let current_key = extract_issue_key(&payload.pull_request.title);
+        assert_eq!(current_key, Some("ISSUE-234".to_string()));
 
         if let Some(changes) = &payload.changes {
             if let Some(title_change) = &changes.title {
-                let old_keys = extract_issue_keys(&title_change.from);
-                assert_eq!(old_keys, vec!["ISSUE-123"]);
+                let old_key = extract_issue_key(&title_change.from);
+                assert_eq!(old_key, Some("ISSUE-123".to_string()));
             }
         }
     }
