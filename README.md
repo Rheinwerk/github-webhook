@@ -7,7 +7,7 @@ title and adds a link to the PR in the corresponding Jira issues' checklist fiel
 ## Features
 
 - Validates GitHub webhook signatures for security
-- Extracts issue keys from PR titles (format: `[ISSUE-123,ISSUE-234] Description`)
+- Extracts issue keys from PR titles (format: `[ISSUE-123] Description`)
 - Updates Jira issues with links to pull requests
 
 ## Configuration
