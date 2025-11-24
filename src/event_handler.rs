@@ -34,12 +34,12 @@ async fn update_issue(
 
     let issue = jira_client.get_issue(issue_key).await?;
 
-    let Some(checklist) = &issue.fields.checklist.text() else {
+    let Some(checklist_text) = issue.fields.checklist.text() else {
         tracing::warn!("No checklist found for {issue_key}. Skip update.");
         return Ok(());
     };
 
-    let mut checklist = ChecklistManipulator::new(checklist);
+    let mut checklist = ChecklistManipulator::new(&checklist_text);
 
     if !checklist.push_pr(html_url) {
         tracing::debug!("checklist not updated, skip");

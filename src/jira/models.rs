@@ -13,7 +13,7 @@ pub struct JiraFields {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum ContentNode {
     Doc {
         content: Vec<ContentNode>,
@@ -25,6 +25,7 @@ pub enum ContentNode {
     Text {
         text: String,
     },
+    HardBreak,
 }
 
 impl ContentNode {
@@ -38,11 +39,19 @@ impl ContentNode {
         }
     }
 
-    pub fn text(&self) -> Option<&str> {
+    pub fn text(&self) -> Option<String> {
         match self {
-            Self::Text { text } => Some(text),
+            Self::Text { text } => Some(text.clone()),
+            Self::HardBreak => Some("\n".to_string()),
             Self::Doc { content, .. } | Self::Paragraph { content } => {
-                content.first().and_then(|node| node.text())
+                let parts: Vec<String> = content.iter()
+                    .filter_map(|node| node.text())
+                    .collect();
+                if parts.is_empty() {
+                    None
+                } else {
+                    Some(parts.join(""))
+                }
             }
         }
     }
