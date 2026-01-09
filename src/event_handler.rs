@@ -1,6 +1,6 @@
 use crate::error::Error;
-use crate::github::models::{extract_issue_key, PullRequestPayload};
-use crate::jira::{ChecklistManipulator, JiraClient};
+use crate::github::models::{extract_issue_key, PullRequest, PullRequestPayload};
+use crate::jira::{ChecklistManipulator, JiraClient, PrStatus};
 
 #[tracing::instrument(skip_all,fields(action = %payload.action, pull_request = %payload.pull_request.number))]
 pub async fn handle_pull_request_event(
@@ -11,10 +11,12 @@ pub async fn handle_pull_request_event(
     tracing::info!("Processing pull_request event");
 
     if let Some(issue_key) = extract_issue_key(&payload.pull_request.title) {
+        let status = pr_status(&payload.pull_request);
         update_issue(
             &jira_client,
             &issue_key,
             &payload.pull_request.html_url,
+            status,
             dry_run,
         )
         .await?
@@ -23,11 +25,22 @@ pub async fn handle_pull_request_event(
     Ok(())
 }
 
+fn pr_status(pr: &PullRequest) -> PrStatus {
+    if pr.merged {
+        PrStatus::Merged
+    } else if pr.state == "closed" {
+        PrStatus::Closed
+    } else {
+        PrStatus::Open
+    }
+}
+
 #[tracing::instrument(skip(jira_client, issue_key, html_url))]
 async fn update_issue(
     jira_client: &JiraClient,
     issue_key: &str,
     html_url: &str,
+    status: PrStatus,
     dry_run: bool,
 ) -> Result<(), Error> {
     tracing::info!("Updating issue");
@@ -41,7 +54,7 @@ async fn update_issue(
 
     let mut checklist = ChecklistManipulator::new(&checklist_text);
 
-    if !checklist.push_pr(html_url) {
+    if !checklist.upsert_pr(html_url, status) {
         tracing::debug!("checklist not updated, skip");
         return Ok(());
     }
@@ -72,6 +85,7 @@ mod tests {
                 html_url: "https://github.com/org/repo/pull/1".to_string(),
                 number: 1,
                 state: "open".to_string(),
+                merged: false,
             },
             changes: None,
         };
@@ -89,6 +103,7 @@ mod tests {
                 html_url: "https://github.com/org/repo/pull/1".to_string(),
                 number: 1,
                 state: "open".to_string(),
+                merged: false,
             },
             changes: Some(Changes {
                 title: Some(TitleChange {
@@ -106,5 +121,41 @@ mod tests {
                 assert_eq!(old_key, Some("ISSUE-123".to_string()));
             }
         }
+    }
+
+    #[test]
+    fn test_pr_status_open() {
+        let pr = PullRequest {
+            title: "Test".to_string(),
+            html_url: "https://github.com/org/repo/pull/1".to_string(),
+            number: 1,
+            state: "open".to_string(),
+            merged: false,
+        };
+        assert_eq!(pr_status(&pr), PrStatus::Open);
+    }
+
+    #[test]
+    fn test_pr_status_merged() {
+        let pr = PullRequest {
+            title: "Test".to_string(),
+            html_url: "https://github.com/org/repo/pull/1".to_string(),
+            number: 1,
+            state: "closed".to_string(),
+            merged: true,
+        };
+        assert_eq!(pr_status(&pr), PrStatus::Merged);
+    }
+
+    #[test]
+    fn test_pr_status_closed() {
+        let pr = PullRequest {
+            title: "Test".to_string(),
+            html_url: "https://github.com/org/repo/pull/1".to_string(),
+            number: 1,
+            state: "closed".to_string(),
+            merged: false,
+        };
+        assert_eq!(pr_status(&pr), PrStatus::Closed);
     }
 }

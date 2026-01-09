@@ -13,6 +13,8 @@ pub struct PullRequest {
     pub html_url: String,
     pub number: u64,
     pub state: String,
+    #[serde(default)]
+    pub merged: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
